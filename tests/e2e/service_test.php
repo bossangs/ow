@@ -7,7 +7,18 @@ if (is_file($dp . 'datapath.php')) { $x = include $dp . 'datapath.php'; if (is_s
 if (!is_file($dp . 'config.php')) { fwrite(STDERR, "site not installed\n"); exit(2); }
 define('WEB_ROOT', $site); define('CORE_PATH', $site . 'core/'); define('IDC_CLI', true); define('IDC_VERSION', '1.0.0'); define('DATA_PATH', $dp);
 $GLOBALS['IDC_CONFIG'] = include DATA_PATH . 'config.php';
-require CORE_PATH . 'polyfill.php'; require CORE_PATH . 'thinkphp/base.php'; require CORE_PATH . 'application/common.php'; require CORE_PATH . 'application/common/SafeApp.php';
+require CORE_PATH . 'polyfill.php'; require CORE_PATH . 'thinkphp/base.php';
+// 与 core/boot.php 一致：PHP 8.1+ 忽略 ThinkPHP 5.1 内核的弃用提示，其余错误仍交给框架
+if (PHP_VERSION_ID >= 80000) {
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+    set_error_handler(function ($errno, $errstr, $errfile = '', $errline = 0) {
+        if ($errno === E_DEPRECATED || $errno === E_USER_DEPRECATED) { return true; }
+        \think\Error::appError($errno, $errstr, $errfile, $errline);
+        return true;
+    });
+}
+\think\Loader::addNamespace('PHPMailer\\PHPMailer', CORE_PATH . 'vendor/phpmailer/phpmailer/src/');
+require CORE_PATH . 'application/common.php'; require CORE_PATH . 'application/common/SafeApp.php';
 $app = new \app\common\SafeApp(CORE_PATH . 'application/'); $app->initialize();
 \think\Db::init(array_merge(include CORE_PATH . 'config/database.php', array('query' => '\\think\\db\\Query')));
 \think\Loader::addNamespace('app', CORE_PATH . 'application');
