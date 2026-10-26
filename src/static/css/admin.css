@@ -1,0 +1,23 @@
+:root{--admin-bg:#f5f7fb;--admin-primary:#315efb}body{background:var(--admin-bg);color:#243047}.admin-shell{display:flex;min-height:100vh}.admin-side{width:235px;background:#172033;color:#d8e0f0;flex:0 0 235px}.admin-brand{font-size:1.15rem;font-weight:700;padding:1.3rem 1.2rem;color:#fff}.admin-side nav a{display:block;padding:.65rem 1.2rem;color:#b8c4d9;text-decoration:none}.admin-side nav a:hover,.admin-side nav a.active{background:#263653;color:#fff}.admin-side .badge{float:right}.admin-main{min-width:0;flex:1}.admin-top{height:60px;background:#fff;border-bottom:1px solid #e6eaf1;display:flex;align-items:center;gap:1rem;padding:0 1.25rem;position:sticky;top:0;z-index:4}.admin-top a{color:#52627c;text-decoration:none}.admin-content{padding:1.25rem;max-width:1600px}.table-card,.card{background:#fff;border:0;box-shadow:0 2px 12px rgba(31,45,75,.06);border-radius:.6rem}.table-card{padding:.6rem}.table{margin-bottom:0}.table td,.table th{vertical-align:middle}.kpi{background:#fff;border-radius:.6rem;padding:1.1rem;box-shadow:0 2px 12px rgba(31,45,75,.06)}.kpi .v{font-size:1.65rem;font-weight:700;color:var(--admin-primary)}.kpi .l{color:#758198}.bar-chart{display:flex;align-items:end;gap:1rem;min-height:175px;padding:1rem 0}.bar-col{display:flex;flex-direction:column;align-items:center;gap:.35rem;flex:1}.bar{width:70%;max-width:55px;background:linear-gradient(#5277ff,#315efb);border-radius:5px 5px 0 0}.auth-card{width:min(420px,calc(100% - 2rem));margin:10vh auto;background:#fff;padding:2rem;border-radius:.8rem;box-shadow:0 6px 30px rgba(31,45,75,.12)}.admin-login{background:linear-gradient(135deg,#edf2ff,#f7f9fc)}.captcha-img{width:110px;height:38px;object-fit:cover;cursor:pointer;border:1px solid #dee3ec}.form-help{font-size:.82rem;color:#78869f;margin-top:.25rem}.mono{font-family:monospace}.admin-form{max-width:900px}@media(max-width:768px){.admin-side{position:fixed;left:-245px;top:0;bottom:0;z-index:10;transition:left .2s}.admin-side.open{left:0}.admin-content{padding:.8rem}.admin-top{padding:0 .8rem}.admin-top span:first-of-type{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.table{font-size:.88rem}.btn{white-space:nowrap}}
+/* 分组菜单与移动端 */
+.admin-brand small{display:block;font-size:12px;opacity:.7;font-weight:400}
+.admin-nav-group{padding:12px 18px 4px;font-size:12px;color:#8a99ad;letter-spacing:1px}
+.admin-top-links a{margin-left:12px}
+.admin-mask{display:none}
+@media (max-width: 991px){
+  .admin-mask.show{display:block;position:fixed;inset:0;background:#0006;z-index:1029}
+  .admin-top-links a{margin-left:8px;font-size:13px}
+  .admin-content .table-responsive{font-size:13px}
+}
+
+/* 开关控件：放大，便于点击（含移动端） */
+.form-switch { padding-left: 3.2em; min-height: 1.8em; }
+.form-switch .form-check-input { width: 2.6em; height: 1.4em; margin-left: -3.2em; cursor: pointer; }
+.admin-brand{display:block;color:#fff;text-decoration:none}.admin-brand:hover{color:#fff}.admin-brand img{height:30px;width:auto;max-width:180px;display:block;margin-bottom:4px}.admin-login .auth-logo{text-align:center;margin:0 0 .5rem}.admin-login .auth-logo img{height:52px;width:auto;max-width:100%}.admin-login .auth-card>.text-muted{text-align:center}.admin-top-logo{display:none;height:24px;width:auto;margin:0 .6rem}
+@media(max-width:768px){.admin-top-logo{display:block}}
+.brand-upload{border:1px dashed #cfd8e6;border-radius:.6rem;padding:.75rem;background:#fbfcfe}.brand-preview{height:72px;display:flex;align-items:center;justify-content:center;margin-bottom:.5rem;border-radius:.4rem;background:#fff;border:1px solid #edf1f7}.brand-upload.is-dark .brand-preview{background:#172033;border-color:#172033}.brand-preview img{max-height:56px;max-width:100%;width:auto}
+@media(max-width:768px){.admin-side{z-index:1040;overflow-y:auto;-webkit-overflow-scrolling:touch}}
+.twofa-input{letter-spacing:.3em;font-variant-numeric:tabular-nums}
+.qr-box{display:inline-block;padding:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px}.qr-box svg{display:block;width:220px;height:220px;max-width:100%}
+.recovery-codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-width:360px}.recovery-codes code{font-size:1rem;padding:4px 8px;background:#f3f4f6;border-radius:4px;color:#111827;text-align:center}
+.twofa-steps{padding-left:1.2rem}.twofa-steps li{margin-bottom:.6rem}

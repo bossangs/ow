@@ -1,0 +1,2 @@
+<?php
+$f=getenv('NAT_PANEL_LOG')?:'/tmp/idcnat-panel.json'; $x=array(); if(is_file($f))$x=json_decode(file_get_contents($f),true); if(!is_array($x))$x=array(); $raw=file_get_contents('php://input'); $d=json_decode($raw,true); $x[]=array('query'=>isset($_SERVER['QUERY_STRING'])?$_SERVER['QUERY_STRING']:'','data'=>$d); file_put_contents($f,json_encode($x)); header('Content-Type: application/json'); echo json_encode(array('code'=>0,'msg'=>'ok','data'=>array()));

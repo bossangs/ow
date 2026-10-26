@@ -1,0 +1,38 @@
+[
+  {
+    "provider": "Dnspod",
+    "captured": 6,
+    "status": "MATCH",
+    "mismatches": []
+  },
+  {
+    "provider": "Aliyun",
+    "captured": 6,
+    "status": "MATCH",
+    "mismatches": []
+  },
+  {
+    "provider": "Volcengine",
+    "captured": 6,
+    "status": "MATCH",
+    "mismatches": []
+  },
+  {
+    "provider": "Jdcloud",
+    "captured": 6,
+    "status": "MATCH",
+    "mismatches": []
+  },
+  {
+    "provider": "Huawei",
+    "captured": 6,
+    "status": "MATCH",
+    "mismatches": []
+  },
+  {
+    "provider": "Baidu",
+    "captured": 6,
+    "status": "MATCH",
+    "mismatches": []
+  }
+]

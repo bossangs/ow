@@ -1,0 +1,6 @@
+# 宝塔/NGINX 伪静态：粘贴到网站设置 -> 伪静态；root 指向本目录
+location ~ ^/(?:core|data(?:_[0-9a-fA-F]+)?)(?:/|$) { deny all; return 404; }
+# uploads/ 用 ^~ 前缀匹配，优先于所有正则 location（包括宝塔自带的 PHP 规则），目录里的脚本既不执行也不能访问
+location ^~ /uploads/ { location ~* \.(?:php\d?|phtml|phar|cgi|pl|py|jsp|asp|aspx|shtml|svg|html?)$ { deny all; return 404; } add_header X-Content-Type-Options nosniff; }
+location / { try_files $uri $uri/ /index.php?s=/$uri&$query_string; }
+location ~ \.php$ { try_files $uri =404; include fastcgi_params; fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name; fastcgi_pass 127.0.0.1:9000; }

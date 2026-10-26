@@ -1,0 +1,1 @@
+<h2 class="h4 mb-3">审计详情</h2><div class="card p-3"><dl><dt>动作</dt><dd><?=h($row['action'])?></dd><dt>目标</dt><dd><?=h($row['target'])?></dd><dt>操作者</dt><dd><?=h($row['actor_name'])?></dd><dt>详情 JSON</dt><dd><pre><?=h($row['detail'])?></pre></dd></dl></div>

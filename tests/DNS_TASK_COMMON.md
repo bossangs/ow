@@ -1,0 +1,30 @@
+# Common rules for DNS driver subtasks (read fully)
+
+Project: PHP subdomain-distribution system. Driver base class (DO NOT MODIFY):
+/workspace/idcdns/src/core/application/common/dns/DnsDriver.php (namespace app\common\dns), plus DnsException.php and DnsFactory.php (do not modify).
+HTTP helper (DO NOT MODIFY, must be used through DnsDriver::send()): /workspace/idcdns/src/core/application/common/lib/HttpClient.php
+Read DnsDriver.php first: it defines the abstract API, unified line codes, helpers (baseUrl, hostOf, pathOf, send, decode, filterSub, toFqdn, toRelative, cleanValue, lineTo/lineFrom/labelsFor, fail, now()).
+
+Each driver = one file `<ClassName>.php` in /workspace/idcdns/src/core/application/common/dns/, `class X extends DnsDriver`, implementing info(), check(), getDomains(), getRecords(), addRecord(), updateRecord(), deleteRecord(), getLines().
+
+REAL implementation required (this is the whole point; a previous attempt was rejected for faking it):
+- Use the provider's REAL official API: real hostnames, real paths/actions, real request parameter names, real JSON/XML response field names, real error formats, pagination where relevant (fetch all pages up to a sane cap, e.g. 20 pages).
+- Implement the REAL authentication/signature algorithm exactly per official docs (research on the web: official doc pages, official SDK source on GitHub). No placeholder headers.
+- info() fields: give each credential field: key, label (Chinese), type ('text' or 'password'), required, secret (true for secrets), help (Chinese: where to obtain the key in the vendor console). Also include an optional field {'key':'endpoint','label':'自定义 API 地址（可选）','type':'text','required':false,'secret':false,'help':'留空使用官方地址；可填 API 反向代理地址'} as the LAST field.
+- `endpoint` override: when config['endpoint'] is set, requests go to that base URL (it may include a path prefix such as http://127.0.0.1:PORT/dnspod — keep that prefix and append the official path). For signatures that include the host, use the host of the URL actually requested (hostOf) – and for signatures that include the canonical URI, use the path actually requested INCLUDING the prefix (so a reverse proxy at a sub-path must forward with the path stripped... note: to keep mocks simple, the mock should strip its own prefix before verifying, i.e. sign the path WITHOUT the endpoint prefix). Final rule to implement: canonical URI used in signatures = the official API path (without endpoint path prefix); Host used in signatures = host of the actually requested URL. Document in a comment.
+- Lines: map unified codes (default/telecom/unicom/mobile/edu/oversea/search) to vendor values per docs; providers without ISP lines return only default.
+- Names: $name relative to zone ('@' apex). Convert to vendor format (FQDN, trailing dot, etc.). Normalize returned values (cleanValue). TXT quoting where vendor requires.
+- Errors: parse the vendor's real error body and throw DnsException with a Chinese prefix + vendor code + message, never include secrets.
+- getRecords returns ['id'=>string,'name'=>relative,'type','value','line'=>unified,'ttl'=>int,'mx'=>int,'status'=>'enable'|'disable'] filtered by filterSub when $subName given (pass subdomain filter to the API too when supported, e.g. Subdomain/RRKeyWord, but always apply filterSub locally).
+- For vendors whose records have no IDs, synthesize a stable id (e.g. base64url of json [type,name,value]) and implement update/delete correctly by replacing the rrset.
+
+PHP 7.0 HARD RULE: no nullable types, no void, no iterable, no multi-catch, no class-const visibility, no keyed/short list destructuring, no arrow functions, no typed properties, no ??=, no array spread, no PHP 8 functions (str_contains etc.), no return-type declarations. Verify every file with `/usr/bin/php7.0 -l`.
+
+Testing (inside /workspace/idcdns/tests/dns/ only, files prefixed with your group name, e.g. g1_*):
+1. `gN_mock.php` – router for `php7.0 -S 127.0.0.1:PORT gN_mock.php`, path prefix per provider (e.g. /dnspod). It must speak each vendor's NATIVE protocol (same paths/actions, same request params, same response JSON shapes, same error shapes), keep state in a temp JSON file (sys_get_temp_dir()/gN_state.json; allow reset via GET /__reset), and VERIFY AUTH: recompute the vendor signature server-side with an INDEPENDENT implementation written in the mock (do not call driver code) using the known test credentials; on mismatch return the vendor's real auth error. Also verify timestamp headers exist.
+2. `gN_vectors.php` – signer known-answer tests: where the vendor docs/official SDK tests publish a worked example (inputs → expected signature/authorization), reproduce it exactly by calling the driver's signer (make the signer a public or protected method; tests may use a small subclass/reflection; use config `_fixed_time` for time). Report per provider: "official vector PASS" or "no published vector found (verified against mock only)".
+3. `gN_run.sh` – starts mock in background, resets state, runs `php7.0 gN_tests.php`, kills mock, exits with test status.
+4. `gN_tests.php` – bootstrap a tiny PSR-4 autoloader for app\ → /workspace/idcdns/src/core/application/. For EACH driver: check(); getDomains() returns the seeded zone example.com; addRecord A 'abc' 1.2.3.4 default ttl 600; addRecord TXT 'abc' "hello world"; addRecord CNAME 'www.abc' target.example.net; addRecord with line 'telecom' when lines supported; getRecords(..., 'abc') returns exactly those (and not records of other subdomains seeded, e.g. 'other'); updateRecord A → 5.6.7.8 and verify; deleteRecord all and verify gone; getLines(); invalid credentials → DnsException whose message contains no secret. Print PASS/FAIL table, exit non-zero on any failure.
+Never contact the real vendor APIs with credentials and never use any real credentials. Reading public docs/SDK source on the web is fine.
+
+Final answer (concise text): files created; per driver: info() field keys, auth algorithm, official vector status, endpoints used; test output summary; known uncertainties.

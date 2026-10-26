@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+import json, os, sys
+p = os.environ.get('FAKE_INCUS_STATE', '/tmp/fake-incus.json')
+try:
+    with open(p) as f: s = json.load(f)
+except Exception: s = {'instances': {}, 'calls': []}
+s.setdefault('instances', {}); s.setdefault('calls', [])
+def save():
+    with open(p, 'w') as f: json.dump(s, f)
+def call(a):
+    s['calls'].append(a); save()
+a = sys.argv[1:]
+if not a: raise SystemExit(1)
+call(a); cmd = a[0]
+if a[:3] == ['image', 'list', '--format']:
+    print('[]'); raise SystemExit(0)
+if cmd == 'info':
+    n = a[1]; x = s['instances'].get(n)
+    if not x: raise SystemExit(1)
+    print(json.dumps({'status': x.get('status', 'stopped'), 'ipv4': x.get('ipv4', '10.88.0.2')})); raise SystemExit(0)
+if cmd == 'launch':
+    s['instances'][a[2]] = {'status': 'running', 'image': a[1], 'ipv4': '10.88.0.2', 'config': {}, 'devices': {}}; save(); raise SystemExit(0)
+if cmd == 'config':
+    if len(a) >= 4 and a[1] == 'device' and a[2] == 'add':
+        x = s['instances'].setdefault(a[3], {'status': 'running', 'devices': {}}); x.setdefault('devices', {})[a[4]] = dict(zip(a[6::2], a[7::2])); save(); raise SystemExit(0)
+    n = a[1]; x = s['instances'].setdefault(n, {}); x.setdefault('config', {})[a[2]] = a[3] if len(a) > 3 else ''; save(); raise SystemExit(0)
+if cmd in ('start', 'stop'):
+    s['instances'][a[1]]['status'] = 'running' if cmd == 'start' else 'stopped'; save(); raise SystemExit(0)
+if cmd == 'delete': s['instances'].pop(a[1], None); save(); raise SystemExit(0)
+if cmd == 'exec':
+    save(); raise SystemExit(0)
+raise SystemExit(1)

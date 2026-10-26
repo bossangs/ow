@@ -1,0 +1,1 @@
+<h2 class="h4 mb-3">计划任务</h2><div class="card p-3"><p>计划任务 URL：<code><?=h($cronUrl)?></code></p><p>最近运行：<?=h($last ? fmt_time($last['create_time']) . ' / ' . $last['detail'] : '暂无记录')?></p><form method="post" action="<?=h(url_to('admin/operations/run'))?>"><?=csrf_field()?><button class="btn btn-primary" data-confirm="确认立即运行计划任务？">手动运行</button></form></div>

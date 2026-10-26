@@ -1,0 +1,1 @@
+<h1 class="h3 mb-3">余额充值</h1><div class="card p-4"><form method="post"><?=csrf_field()?><label class="form-label">充值金额</label><input class="form-control mb-3" name="amount" type="number" min="0.01" step="0.01" required><button class="btn btn-primary">创建充值订单</button></form></div>

@@ -1,0 +1,25 @@
+# 构建产物与本地工作文件
+/dist/
+/preview/
+/log/
+/tp/
+/NOTES.md
+
+# 安装后生成的配置与数据（永远不要提交）
+src/data/config.php
+src/data/install.lock*
+src/data/datapath.php
+src/data/runtime/
+src/core/datapath.php
+src/data_*/
+src/uploads/brand/*
+!src/uploads/brand/index.html
+
+# Python / 编辑器
+.venv/
+__pycache__/
+*.pyc
+*.log
+*.bak
+*~
+.DS_Store
