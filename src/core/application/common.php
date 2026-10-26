@@ -145,7 +145,9 @@ function url_to($path = '', array $params = [], $full = false)
 /** 静态资源地址 */
 function static_url($file)
 {
-    return base_path() . '/static/' . ltrim($file, '/') . '?v=' . IDC_VERSION;
+    $file = ltrim($file, '/');
+    $mt = @filemtime(WEB_ROOT . 'static/' . $file);
+    return base_path() . '/static/' . $file . '?v=' . IDC_VERSION . ($mt ? '.' . $mt : '');
 }
 
 /** 金额格式化 */

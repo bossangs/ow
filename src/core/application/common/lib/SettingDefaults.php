@@ -73,6 +73,7 @@ class SettingDefaults
             'market_max_domains_per_user' => '10',
             'market_max_price' => '9999',
             'nat_node_timeout' => '180',
+            'nat_reg_token_hours' => '24',
             'nat_ports_per_instance' => '20',
             'notify_max_attempts' => '5',
             'pay_balance_enable' => '1',

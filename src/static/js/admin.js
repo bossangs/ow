@@ -16,14 +16,14 @@
   if (mask) { mask.addEventListener('click', closeSide); }
 
   // 二次确认：<button data-confirm="确定？">
-  document.querySelectorAll('[data-confirm]').forEach(function (el) {
-    el.addEventListener('click', function (e) {
-      if (!window.confirm(el.getAttribute('data-confirm'))) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
-  });
+  // 用事件委托，弹窗里动态加载的按钮也生效
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-confirm]') : null;
+    if (el && !window.confirm(el.getAttribute('data-confirm'))) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
   // 刷新验证码
   document.querySelectorAll('[data-captcha]').forEach(function (el) {
     el.addEventListener('click', function () {

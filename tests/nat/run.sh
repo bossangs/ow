@@ -36,8 +36,8 @@ assert q('DELETE','/v1/instances/vmone')['code']==0
 print('NAT agent auth/lifecycle passed')
 PY
 php7.0 "$ROOT/tests/nat/driver_test.php"
-php7.0 -r "require '$ROOT/src/core/application/common/nat/NatScript.php'; file_put_contents('$TD/rendered.sh', app\\common\\nat\\NatScript::render(array('panel_url'=>'http://127.0.0.1:19183','node_id'=>'render-node','reg_token'=>'reg','agent_port'=>19184,'images'=>'debian12,ubuntu2404','tls'=>0)));"
+php7.0 -r "require '$ROOT/src/core/application/common/nat/NatScript.php'; file_put_contents('$TD/rendered.sh', app\\common\\nat\\NatScript::render(array('panel_url'=>'http://127.0.0.1:19183','node_id'=>'4242','reg_token'=>'reg','agent_port'=>19184,'images'=>'debian12,ubuntu2404','tls'=>0)));"
 bash -n "$TD/rendered.sh"; shellcheck "$TD/rendered.sh"
 IDCNAT_DRY_RUN=1 IDCNAT_SKIP_INSTALL=1 IDCNAT_TEST_ALLOW_NONROOT=1 bash "$TD/rendered.sh" >/"$TD/render.log"
-grep -q 'render-node' "$TD/render.log"
+grep -q '"node_id":"4242"' "$TD/render.log"
 echo 'NAT render/dry-run passed'

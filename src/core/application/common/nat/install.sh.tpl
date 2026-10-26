@@ -6,6 +6,7 @@ die(){ printf '[idcnat] error: %s\n' "$*" >&2; exit 1; }
 if [ "${IDCNAT_TEST_ALLOW_NONROOT:-0}" != 1 ] && [ "$(id -u)" -ne 0 ]; then die '请使用 root 运行'; fi
 # shellcheck disable=SC1091
 . /etc/os-release 2>/dev/null || true
+if [ "$ENABLE_IPV6" = auto ]; then if ip -6 route get 2606:4700:4700::1111 >/dev/null 2>&1; then ENABLE_IPV6=1; else ENABLE_IPV6=0; fi; log "IPv6 自动检测：$([ "$ENABLE_IPV6" = 1 ] && printf '有公网 IPv6，已启用' || printf '无公网 IPv6，不启用')"; fi
 run(){ if [ "${IDCNAT_DRY_RUN:-0}" = 1 ]; then printf '+ '; printf '%q ' "$@"; printf '\n'; else "$@"; fi; }
 if [ "${IDCNAT_SKIP_INSTALL:-0}" != 1 ]; then
   case "${ID:-}" in debian|ubuntu) ;; *) die '仅支持 Debian/Ubuntu 系统';; esac
@@ -24,9 +25,9 @@ if [ "${IDCNAT_SKIP_INSTALL:-0}" != 1 ]; then
   run "$HV" profile device add default root disk path=/ pool=default || true
   run "$HV" profile device add default eth0 nic nictype=bridged parent=idcnatbr0 || true
   run install -d -m 755 /etc/sysctl.d
-  { printf 'net.ipv4.ip_forward=1\n'; [ "$ENABLE_IPV6" = 1 ] && printf 'net.ipv6.conf.all.forwarding=1\n'; } | run tee /etc/sysctl.d/99-idcnat.conf >/dev/null
+  { printf 'net.ipv4.ip_forward=1\n'; if [ "$ENABLE_IPV6" = 1 ]; then printf 'net.ipv6.conf.all.forwarding=1\n'; fi; } | run tee /etc/sysctl.d/99-idcnat.conf >/dev/null
   run sysctl --system
-  for image in $IMAGES; do case "$image" in debian11|debian12|debian13|ubuntu2004|ubuntu2204|ubuntu2404|alpine320|alpine321|rocky9|alma9) run "$HV" image copy "images:$image" local: --alias "$image" || true;; *) log "warning: skipping unknown image $image";; esac; done
+  for image in ${IMAGES//,/ }; do case "$image" in debian11|debian12|debian13|ubuntu2004|ubuntu2204|ubuntu2404|alpine320|alpine321|rocky9|alma9) run "$HV" image copy "images:$image" local: --alias "$image" || true;; *) log "warning: skipping unknown image $image";; esac; done
 fi
 if [ "${IDCNAT_DRY_RUN:-0}" = 1 ]; then ROOT=${TMPDIR:-/tmp}/idcnat-dry; CONF="$ROOT/agent.json"; mkdir -p "$ROOT"; chmod 700 "$ROOT"; else ROOT=/opt/idcnat; CONF=/etc/idcnat/agent.json; run install -d -m 700 "$ROOT" /etc/idcnat /var/lib/idcnat /etc/systemd/system; fi
 printf '%s' "$AGENT_B64" | base64 -d > "${ROOT}/idcnat_agent.py"; chmod 755 "${ROOT}/idcnat_agent.py"
@@ -56,14 +57,14 @@ fi
 run systemctl daemon-reload; run systemctl enable --now idcnat-agent
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q active; then run ufw allow "${PORT}/tcp"; fi
 if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then run firewall-cmd --permanent --add-port="${PORT}/tcp"; run firewall-cmd --reload; fi
-PAYLOAD=$(python3 - "$NODE_ID" "$REG_TOKEN" "$PUBLIC4" "$PUBLIC6" "$PORT" "$BACKEND" "$TOKEN" "$HOST" "$PORT_START" "$PORT_END" "$MAX_INSTANCES" "$IMAGES" <<'PY'
+PAYLOAD=$(TLS_RENDER="$TLS" python3 - "$NODE_ID" "$REG_TOKEN" "$PUBLIC4" "$PUBLIC6" "$PORT" "$BACKEND" "$TOKEN" "$HOST" "$PORT_START" "$PORT_END" "$MAX_INSTANCES" "$IMAGES" <<'PY'
 import json,os,sys
 n,r,i4,i6,p,b,t,h,ps,pe,m,imgs=sys.argv[1:]
-print(json.dumps({'node_id':n,'reg_token':r,'agent_url':('https' if os.environ.get('TLS_RENDER')=='1' else 'http')+'://'+(i4 or i6)+':'+p,'agent_token':t,'public_ipv4':i4,'public_ipv6':i6,'backend':b,'hostname':h,'cpu_cores':os.cpu_count() or 1,'mem_mb':0,'disk_gb':0,'port_start':int(ps),'port_end':int(pe),'max_instances':int(m),'images':[x for x in imgs.split(',') if x],'agent_version':'1.1.0'}))
+print(json.dumps({'node_id':n,'reg_token':r,'agent_url':('https' if os.environ.get('TLS_RENDER')=='1' else 'http')+'://'+(i4 or ('['+i6+']' if i6 else ''))+':'+p,'agent_token':t,'public_ipv4':i4,'public_ipv6':i6,'backend':b,'hostname':h,'cpu_cores':os.cpu_count() or 1,'mem_mb':0,'disk_gb':0,'port_start':int(ps),'port_end':int(pe),'max_instances':int(m),'images':[x for x in imgs.split(',') if x],'agent_version':'1.1.0'}, separators=(',',':')))
 PY
 )
-if [ "${IDCNAT_DRY_RUN:-0}" = 1 ]; then log "dry-run registration payload: $(printf '%s' "$PAYLOAD" | sed 's/"agent_token":"[^"]*"/"agent_token":"***"/')"; else
-  RESPONSE=$(curl -fsS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$PANEL_URL/index.php?s=/api/nat/register") || { printf '%s\n' "$PAYLOAD" | sed 's/"agent_token":"[^"]*"/"agent_token":"***"/'; exit 1; }
-  printf '%s' "$RESPONSE" | grep -q '"code"[[:space:]]*:[[:space:]]*0' || { printf '%s\n' "$PAYLOAD" | sed 's/"agent_token":"[^"]*"/"agent_token":"***"/'; exit 1; }
+if [ "${IDCNAT_DRY_RUN:-0}" = 1 ] && [ "${IDCNAT_DRY_RUN_REGISTER:-0}" != 1 ]; then log "dry-run registration payload: $(printf '%s' "$PAYLOAD" | sed 's/"agent_token": *"[^"]*"/"agent_token":"***"/')"; else
+  RESPONSE=$(curl -fsS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$PANEL_URL/index.php?s=/api/nat/register") || { printf '%s\n' "$PAYLOAD" | sed 's/"agent_token": *"[^"]*"/"agent_token":"***"/'; exit 1; }
+  printf '%s' "$RESPONSE" | grep -q '"code"[[:space:]]*:[[:space:]]*0' || { printf '%s\n' "$PAYLOAD" | sed 's/"agent_token": *"[^"]*"/"agent_token":"***"/'; exit 1; }
 fi
 log "安装完成: backend=$BACKEND agent_port=$PORT public_ipv4=$PUBLIC4 public_ipv6=$PUBLIC6"

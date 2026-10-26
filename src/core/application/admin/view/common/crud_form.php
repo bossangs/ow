@@ -123,6 +123,16 @@ $backUrl = isset($backUrl) ? $backUrl : url_to('admin/' . $ctrl . '/index');
           } ?>
           <fieldset class="border rounded p-3 mb-2"<?php if ($fixed === ''): ?> data-show-when="#f_<?= h($driverField) ?>=<?= h($dcode) ?>"<?php endif; ?>>
             <legend class="fs-6 fw-semibold w-auto px-1 mb-2"><?= h($dinfo['name']) ?> 配置</legend>
+            <?php $manualFlag = !empty($dinfo['manual_flag']) ? $dinfo['manual_flag'] : ''; ?>
+            <?php if (!empty($dinfo['auto_html'])): ?><?= $dinfo['auto_html'] ?><?php endif; ?>
+            <?php if ($manualFlag !== ''): ?>
+            <details class="mt-2 nat-manual">
+              <summary class="small text-muted">高级：手动填写（已自行部署 Agent 时使用）</summary>
+              <div class="form-check form-switch my-2">
+                <input class="form-check-input" type="checkbox" id="f_<?= h($manualFlag) ?>" name="<?= h($manualFlag) ?>" value="1">
+                <label class="form-check-label small" for="f_<?= h($manualFlag) ?>">使用下面手动填写的内容覆盖（不勾选则保留系统自动填写的值）</label>
+              </div>
+            <?php endif; ?>
             <?php foreach ((array) $dinfo['fields'] as $df): ?>
               <?php
               $dk = $df['key'];
@@ -149,6 +159,7 @@ $backUrl = isset($backUrl) ? $backUrl : url_to('admin/' . $ctrl . '/index');
                 <?php if (!empty($df['help'])): ?><div class="form-help"><?= h($df['help']) ?></div><?php endif; ?>
               </div>
             <?php endforeach; ?>
+            <?php if ($manualFlag !== ''): ?></details><?php endif; ?>
             <?php if (!empty($dinfo['doc'])): ?>
               <div class="form-help">接口文档：<a href="<?= h($dinfo['doc']) ?>" target="_blank" rel="noopener"><?= h($dinfo['doc']) ?></a></div>
             <?php endif; ?>

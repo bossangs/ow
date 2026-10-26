@@ -69,8 +69,9 @@ try {
   throws('order admin invalid status rejected', function() use ($free) { OrderAdminService::update($free['id'],array('status'=>'bogus'),'e2e'); });
   ok('order related returns payments/services', is_array(OrderAdminService::related($admin)));
 
-  ok('nat script renders', strpos(NatScript::render(array('panel_url'=>'http://127.0.0.1:19001','node_id'=>'n1','reg_token'=>'t1')), 'n1') !== false);
-  throws('nat script injection rejected', function() { NatScript::render(array('panel_url'=>'http://127.0.0.1:19001','node_id'=>"n1\nrm -rf /")); });
+  ok('nat script renders', strpos(NatScript::render(array('panel_url'=>'http://127.0.0.1:19001','node_id'=>'71','reg_token'=>'t1')), "NODE_ID='71'") !== false);
+  throws('nat script non-numeric node id rejected', function() { NatScript::render(array('panel_url'=>'http://127.0.0.1:19001','node_id'=>'n1')); });
+  throws('nat script injection rejected', function() { NatScript::render(array('panel_url'=>'http://127.0.0.1:19001','node_id'=>"1\nrm -rf /")); });
   ok('market commission bounded', MarketService::commissionRate(array('commission_rate'=>-1,'user_id'=>$uid)) >= 0 && MarketService::commissionRate(array('commission_rate'=>-1,'user_id'=>$uid)) <= 100);
 } catch (Exception $e) { ok('service test harness', false, $e->getMessage() . " @ " . $e->getFile() . ':' . $e->getLine()); }
 

@@ -2,6 +2,7 @@
 
 namespace app\admin\controller;
 
+use app\common\service\NatNodeService;
 use app\common\upstream\UpstreamFactory;
 use think\Db;
 
@@ -20,6 +21,18 @@ class Upstream extends Crud
     protected function fields()
     {
         $drivers = UpstreamFactory::infoAll();
+        if (isset($drivers['natnode'])) {
+            // NAT 节点不手填：节点注册时自动写入 Agent 地址/令牌/公网 IP；手动填写放在折叠的高级选项里
+            $upId = (int) $this->request->param('id', 0);
+            $row = $upId ? Db::name($this->table)->find($upId) : null;
+            $isNat = $row && $row['driver'] === 'natnode';
+            $drivers['natnode']['manual_flag'] = 'natnode_manual';
+            $drivers['natnode']['auto_html'] = $this->renderFile('admin/view/upstream/nat_auto.php', [
+                'node' => $isNat ? NatNodeService::nodeOfUpstream($upId) : null,
+                'upId' => $isNat ? $upId : 0,
+                'cfg' => $isNat ? decrypt_json($row['config']) : [],
+            ]);
+        }
         $opts = [];
         foreach ($drivers as $code => $info) {
             $opts[$code] = $info['name'];
@@ -53,6 +66,35 @@ class Upstream extends Crud
         }
     }
 
+    /** 新建 NAT 上游且未手动填写：自动用默认参数添加节点，直接显示安装命令 */
+    private $natAutoNode = 0;
+
+    protected function afterSave($id, array $data)
+    {
+        if (isset($data['driver']) && $data['driver'] === 'natnode' && !$this->request->post('natnode_manual') && !NatNodeService::nodeOfUpstream($id)) {
+            $this->natAutoNode = (int) $id;
+        }
+    }
+
+    public function edit()
+    {
+        $isNew = !(int) $this->request->param('id', 0);
+        $r = parent::edit();
+        if ($this->request->isPost() && $isNew && $this->natAutoNode) {
+            try {
+                $nodeId = NatNodeService::quickCreate($this->natAutoNode);
+                audit('admin.nat_node.create', 'NAT节点#' . $nodeId, ['quick' => 1, 'upstream_id' => $this->natAutoNode, 'from' => 'upstream']);
+                session('flash', null);
+                $this->flash('NAT 上游已创建，并已用默认参数添加节点。复制下面的命令到节点服务器上运行，注册后 Agent 信息会自动填入上游');
+                return $this->redirectTo('admin/nat_node/command', ['id' => $nodeId]);
+            } catch (\Exception $e) {
+                $this->flash('上游已保存，但自动添加节点失败：' . $e->getMessage() . '。请到「NAT 节点」手动添加', 'warning');
+                return $this->redirectTo('admin/nat_node/edit', ['upstream_id' => $this->natAutoNode]);
+            }
+        }
+        return $r;
+    }
+
     public function test()
     {
         if (!$this->request->isPost()) {
@@ -62,8 +104,13 @@ class Upstream extends Crud
         if (!$r) {
             $this->abort('上游不存在', 404);
         }
+        $cfg = decrypt_json($r['config']);
+        if ($r['driver'] === 'natnode' && empty($cfg['agent_url'])) {
+            $this->flash('这个 NAT 上游还没有节点注册：请先到「NAT 节点」生成安装命令并在节点上运行', 'warning');
+            return $this->back();
+        }
         try {
-            $x = UpstreamFactory::make($r['driver'], decrypt_json($r['config']))->testConnection();
+            $x = UpstreamFactory::make($r['driver'], $cfg)->testConnection();
             $msg = is_array($x) && isset($x['message']) ? $x['message'] : '连接成功';
             Db::name($this->table)->where('id', $r['id'])->update(['last_test_time' => time(), 'last_test_msg' => mb_substr($msg, 0, 250)]);
             $this->flash('测试连接成功：' . $msg);
@@ -155,7 +202,13 @@ class Upstream extends Crud
             ['label' => '导入商品', 'post' => true, 'url' => function ($r) {
                 return url_to('admin/upstream/importProducts');
             }, 'when' => function ($r) {
-                return $r['driver'] !== 'nat';
+                return $r['driver'] !== 'natnode';
+            }],
+            ['label' => '节点 / 安装命令', 'url' => function ($r) {
+                $n = NatNodeService::nodeOfUpstream($r['id']);
+                return $n ? url_to('admin/nat_node/command', ['id' => $n['id']]) : url_to('admin/nat_node/edit', ['upstream_id' => $r['id']]);
+            }, 'when' => function ($r) {
+                return $r['driver'] === 'natnode';
             }],
         ];
     }

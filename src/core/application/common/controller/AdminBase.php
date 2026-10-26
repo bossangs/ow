@@ -311,6 +311,10 @@ abstract class AdminBase extends Base
                 ? (string) Db::name($this->table)->where('id', $id)->value(isset($f['driver_field']) ? $f['driver_field'] : 'driver')
                 : $driver;
             $sameDriver = $oldDriver === $driver;
+            // 驱动声明了 manual_flag（如 NAT 节点由系统自动填写）：未勾选「手动填写」时保留原配置，不校验必填
+            if (!empty($drivers[$driver]['manual_flag']) && !$this->request->post($drivers[$driver]['manual_flag'])) {
+                return encrypt_json($sameDriver ? $old : []);
+            }
             $out = [];
             foreach ((array) $drivers[$driver]['fields'] as $df) {
                 $fk = $df['key'];
