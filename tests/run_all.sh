@@ -9,5 +9,7 @@ for f in "$ROOT"/tests/upstream/run.sh "$ROOT"/tests/dns/run.sh "$ROOT"/tests/dn
 run "$ROOT/tests/e2e/run_service.sh"
 run "$ROOT/tests/e2e/ticket_run.sh"
 run "$ROOT/tests/e2e/flow_run2.sh"
+run "$ROOT/tests/e2e/open_basedir_test.sh"
+run "$ROOT/tests/e2e/captcha_test.sh"
 echo "TEST SUITES: $pass passed, $fail failed"
 exit "$fail"

@@ -25,9 +25,12 @@ class Auth extends FrontBase
 
     public function captcha()
     {
-        header('Content-Type: image/svg+xml; charset=utf-8');
+        $scene = (string)$this->get('scene', 'login');
+        if (!in_array($scene, Captcha::FRONT_SCENES, true)) {
+            $scene = 'login';
+        }
 
-        return Captcha::create(preg_replace('/[^a-z_]/', '', (string)$this->get('scene', 'login')));
+        return Captcha::response($scene);
     }
 
     /** 只允许站内跳转：/开头（不能是 // 或 /\）或 模块/控制器/方法 形式，防止开放重定向 */

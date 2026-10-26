@@ -135,7 +135,19 @@ class Settings extends AdminBase
     {
         if (!$this->request->isPost()) {
             $this->abort('请求方式错误', 405);
-        }$r = Notify::telegram(trim($this->request->post('chat_id', '')), '后台 Telegram 配置测试成功。');
+        }
+        $chatId = trim((string) $this->request->post('chat_id', ''));
+        if ($chatId === '') {
+            // 测试按钮不带 chat_id 时，发给「管理员 Chat ID」里的第一个
+            $ids = preg_split('/[,;\s]+/', trim((string) setting('tg_admin_chat_id', '')));
+            $chatId = isset($ids[0]) ? $ids[0] : '';
+        }
+        if ($chatId === '') {
+            $this->flash('请先填写并保存「管理员 Chat ID」', 'danger');
+
+            return $this->back();
+        }
+        $r = Notify::telegram($chatId, '后台 Telegram 配置测试成功。');
         $this->flash($r === true ? '测试消息已发送' : (string)$r, $r === true ? 'success' : 'danger');
 
         return $this->back();

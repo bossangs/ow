@@ -7,6 +7,26 @@ namespace app\common\lib;
  */
 class Captcha
 {
+    /** 前台允许的验证码场景：登录、注册、找回密码、充值卡 */
+    const FRONT_SCENES = ['login', 'register', 'reset', 'card'];
+
+    /**
+     * 输出验证码图片。必须用 Response 设置类型：直接 header() 会被框架默认的
+     * text/html 覆盖，浏览器就不显示 <img> 里的 SVG。
+     *
+     * @return \think\Response
+     */
+    public static function response($scene = 'default')
+    {
+        return \think\Response::create(self::create($scene), 'html', 200, [
+            'Content-Type' => 'image/svg+xml; charset=utf-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'X-Content-Type-Options' => 'nosniff',
+        ])->contentType('image/svg+xml', 'utf-8');
+    }
+
     public static function create($scene = 'default', $len = 4)
     {
         $chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';

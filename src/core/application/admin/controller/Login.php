@@ -19,9 +19,7 @@ class Login extends AdminBase
 
     public function captcha()
     {
-        $svg = Captcha::create('admin');
-
-        return Response::create($svg, 'html')->header(['Content-Type' => 'image/svg+xml']);
+        return Captcha::response('admin');
     }
 
     public function index()

@@ -63,7 +63,7 @@ $brandAccept = [
                   <?php endif; ?>
                 </div>
               <?php else: ?>
-                <input class="form-control" type="<?= $type === 'number' ? 'number' : ($type === 'password' ? 'password' : 'text') ?>" name="<?= h($key) ?>" value="<?= $type === 'password' ? '' : h($v) ?>">
+                <input class="form-control" type="<?= $type === 'number' ? 'number' : ($type === 'password' ? 'password' : 'text') ?>" name="<?= h($key) ?>" value="<?= $type === 'password' ? '' : h($v) ?>"<?php if ($type === 'password'): ?> autocomplete="new-password" placeholder="<?= setting($key, '') !== '' ? '已保存，留空不修改' : '未设置' ?>"<?php endif; ?>>
               <?php endif; ?>
               <?php if ($help !== ''): ?>
                 <div class="form-help"><?= h($help) ?></div>
@@ -101,7 +101,7 @@ $brandAccept = [
             </p>
             <input id="cron-url" class="form-control mb-2 mono" value="<?= h($cronUrl) ?>" readonly>
             <p class="text-muted">访问触发仅是无计划任务主机的兜底方案。宝塔可设置“访问URL”每 5 分钟；虚拟主机面板可定时访问，也可使用 cron-job.org。</p>
-            <p class="mb-1">最近运行：<?= h(setting('cron_last_run', '未运行')) ?>；结果：</p>
+            <p class="mb-1">最近运行：<?php $cronLast = (int)setting('cron_last_run', '0'); ?><?= $cronLast > 0 ? h(date('Y-m-d H:i:s', $cronLast)) : '未运行' ?>；结果：</p>
             <pre class="bg-light p-2 rounded small"><?= h(setting('cron_last_result', '')) ?></pre>
             <!-- 独立表单（放在设置表单外面，见页面底部），这里只是触发按钮 -->
             <button class="btn btn-outline-danger" type="submit" form="cronKeyForm" data-confirm="重新生成后旧的 Web 计划任务地址立即失效，确定？">重新生成密钥</button>

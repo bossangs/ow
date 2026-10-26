@@ -204,9 +204,11 @@ php core/tools/admin_reset.php reset-password admin # 生成一个随机新密�
 
 **提示 data 目录不可写？** 宝塔把网站目录所有者改为 `www`；虚拟主机在文件管理里给 data 目录写权限（755 一般就够）；IIS 给 `IIS_IUSRS` 修改权限。
 
-**开了 open_basedir 报错？** 选"网站内随机名目录"安装，或者把自定义数据目录放在 open_basedir 允许的范围内。
+**开了 open_basedir（宝塔"防跨站攻击"）报错？** 1.0.0 正式包已兼容宝塔默认的防跨站设置，不用关闭它。数据目录选"网站内随机名目录"最省事；用自定义数据目录时，要放在 open_basedir 允许的范围内。
 
-**通知不发？** 检查计划任务有没有在跑（后台能看到上次运行时间和结果），再检查 SMTP/Telegram 设置并发测试消息。
+**图形验证码不显示？** 不需要安装任何 PHP 扩展（验证码是 SVG 图片，不依赖 GD）。请确认用的是最新安装包；如果前面加了 CDN（如 Cloudflare），不要对 `index.php?s=/index/auth/captcha` 开缓存。直接在浏览器打开 `你的域名/index.php?s=/index/auth/captcha&scene=register`，正常时会看到一张验证码图片，而不是一串代码。
+
+**通知不发？** 检查计划任务有没有在跑（后台「系统设置 → 计划任务」能看到最近运行时间和结果），再检查 SMTP/Telegram 设置并发测试消息。Telegram 的 Bot Token 保存后输入框会显示"已保存，留空不修改"，再次保存时留空不会清掉它；测试消息默认发给"管理员 Chat ID"。
 
 **换了 Logo 但浏览器标签页还是旧图标？** 浏览器会缓存网站图标，强制刷新（Ctrl+F5）或过一会儿再看。
 

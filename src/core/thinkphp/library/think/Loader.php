@@ -57,6 +57,11 @@ class Loader
     // 获取应用根目录
     public static function getRootPath()
     {
+        // o2o云：框架直接装在网站根目录（没有 public/ 子目录），这里固定返回网站根目录；
+        // 否则会到上一级目录找 vendor/、runtime/，在宝塔默认开启的 open_basedir 下直接报错
+        if (defined('WEB_ROOT')) {
+            return rtrim(str_replace('/', DIRECTORY_SEPARATOR, WEB_ROOT), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        }
         if ('cli' == PHP_SAPI) {
             $scriptName = realpath($_SERVER['argv'][0]);
         } else {
