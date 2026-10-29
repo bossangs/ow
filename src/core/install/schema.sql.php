@@ -603,9 +603,6 @@ CREATE TABLE `{p}nat_node` (
   PRIMARY KEY (`id`),
   KEY `upstream_id` (`upstream_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET={charset};
-CREATE TABLE `{p}whmcs_nat_instance` (
-  `id` int unsigned NOT NULL AUTO_INCREMENT, `bridge_id` char(64) NOT NULL, `external_id` varchar(20) NOT NULL, `node_id` int NOT NULL DEFAULT 0, `instance_name` varchar(80) NOT NULL DEFAULT '', `status` varchar(16) NOT NULL DEFAULT 'creating', `create_time` int NOT NULL DEFAULT 0, `update_time` int NOT NULL DEFAULT 0, PRIMARY KEY (`id`), UNIQUE KEY `bridge_external` (`bridge_id`,`external_id`), KEY `node_id` (`node_id`)
-) ENGINE=InnoDB DEFAULT CHARSET={charset};
 CREATE TABLE `{p}dns_protected` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `domain_id` int NOT NULL,

@@ -8,10 +8,9 @@ cleanup() {
     rm -rf "$TD"
 }
 trap cleanup EXIT
-export IDCNAT_TEST_TOKEN='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+export IDCNAT_TEST_TOKEN='local-test-token'
 export IDCNAT_TEST_STATE="$TD/state.json"
 export IDCNAT_TEST_PORT=19184
-printf '{"instances":{}}' > "$IDCNAT_TEST_STATE"
 python3 "$ROOT/tests/whmcs_nat/mock_agent.py" >"$TD/mock.log" 2>&1 &
 PID=$!
 sleep 0.3
@@ -20,9 +19,6 @@ if ! kill -0 "$PID" 2>/dev/null; then
     exit 1
 fi
 php7.0 -l "$ROOT/whmcs/modules/servers/idcnat/idcnat.php"
-php7.0 -l "$ROOT/whmcs/modules/addons/idcnatbridge/idcnatbridge.php"
 php7.0 "$ROOT/tests/whmcs_nat/module_test.php"
-printf '{"instances":{}}' > "$IDCNAT_TEST_STATE"
 php -l "$ROOT/whmcs/modules/servers/idcnat/idcnat.php"
-php -l "$ROOT/whmcs/modules/addons/idcnatbridge/idcnatbridge.php"
 php "$ROOT/tests/whmcs_nat/module_test.php"

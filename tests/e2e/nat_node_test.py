@@ -162,63 +162,13 @@ def main():
     check("[NAT] %s 安装脚本（DRY_RUN）走完并注册成功" % where, rc == 0 and "安装完成" in out, out[-1500:])
     n1 = node(nid)
     check("[NAT] 注册后令牌作废、写入公网 IP 与心跳、自动建上游",
-          n1 and n1["reg_token"] in ("", "NULL") and int(n1["last_heartbeat"]) >= int(t0) and n1["public_ip"] not in ("", "NULL") and int(n1["upstream_id"]) > 0, n1)
+          n1 and n1["reg_token"] in ("", "NULL") and int(n1["last_heartbeat"]) > t0 and n1["public_ip"] not in ("", "NULL") and int(n1["upstream_id"]) > 0, n1)
     up = int(n1["upstream_id"])
     check("[NAT] 自动创建的上游为 natnode 驱动", one("select driver from %s where id=%d" % (t("upstream"), up)) == "natnode")
     r = admin.get("admin/nat_node/index")
     card = soup(r.text).select_one('.nat-node-card[data-node-id="%d"]' % nid)
     check("[NAT] 列表显示「在线」、IP 与关联上游", card is not None and card.select_one(".nat-state").get("data-state") == "online"
           and n1["public_ip"] in card.get_text(), card.get_text(" ", strip=True)[:300] if card else "")
-
-    # ---------- WHMCS bridge: one-time pairing, HTTPS, auth, discovery, rotation ----------
-    sql("insert into %s(name,value) values('trust_proxy_header','X-Forwarded-Proto') on duplicate key update value='X-Forwarded-Proto'" % t("setting"))
-    whmcs_table = t("whmcs_nat_instance")
-    sql("alter table %s change bridge_id bridge_hash char(64) not null" % whmcs_table)
-    sql("delete from %s" % whmcs_table)
-    sql("insert into %s (bridge_hash,external_id,node_id,instance_name,status,create_time,update_time) values('%s','99999999999999999999',0,'wabcde-99999999999999999999','active',1,1)" % (whmcs_table, "a" * 64))
-    sql("delete from %s where name='nat_whmcs_bridge_id'" % t("setting"))
-    sql("update %s set value='5' where name='schema_version'" % t("setting"))
-    T.clear_cache()
-    r = admin.get("admin/whmcsbridge/index")
-    check("[WHMCS] NAT 页面可进入桥接配置", "WHMCS NAT 自动桥接" in r.text and "生成/轮换桥接密钥" in r.text)
-    migrated_id = one("select bridge_id from %s where external_id='99999999999999999999'" % whmcs_table)
-    migrated_name = one("select instance_name from %s where external_id='99999999999999999999'" % whmcs_table)
-    check("[WHMCS] v5 到 v6 自动迁移保留旧服务映射和实例名",
-          one("select value from %s where name='schema_version'" % t("setting")) == "6"
-          and re.fullmatch(r"[a-f0-9]{32}", migrated_id) is not None and migrated_name == "wabcde-99999999999999999999", (migrated_id, migrated_name))
-    r, al = admin.submit("admin/whmcsbridge/index", {}, match="admin/whmcsbridge/rotate")
-    token_match = re.search(r"<code[^>]*>([a-f0-9]{64})</code>", r.text)
-    bridge_token = token_match.group(1) if token_match else ""
-    bridge_id = one("select value from %s where name='nat_whmcs_bridge_id'" % t("setting"))
-    check("[WHMCS] 配对密钥只在轮换后显示一次并有稳定桥接身份", bridge_token != "" and re.fullmatch(r"[a-f0-9]{32}", bridge_id) is not None, (r.url, al))
-    bridge_url = F.BASE + "/index.php?s=/api/nat/whmcsInfo"
-    unauth = requests.get(bridge_url, timeout=30)
-    check("[WHMCS] 桥接 API 拒绝未授权请求", unauth.status_code == 401)
-    no_tls = requests.get(bridge_url, headers={"Authorization": "Bearer " + bridge_token}, timeout=30)
-    check("[WHMCS] 桥接 API 拒绝未加密请求", no_tls.status_code == 400)
-    headers = {"Authorization": "Bearer " + bridge_token, "X-Forwarded-Proto": "https"}
-    info = requests.get(bridge_url, headers=headers, timeout=30)
-    try:
-        info_json = info.json()
-    except ValueError:
-        info_json = {}
-    discovered = info_json.get("data", {}).get("nodes", []) if isinstance(info_json, dict) else []
-    discovered_node = next((x for x in discovered if int(x.get("id", 0)) == nid), {})
-    check("[WHMCS] 配对后自动发现已注册 NAT 节点及剩余容量", info.status_code == 200 and info_json.get("code") == 0
-          and discovered_node.get("state") == "online" and int(discovered_node.get("available", 0)) > 0, discovered_node)
-    node_payload = str(discovered).lower()
-    check("[WHMCS] 自动发现响应不泄露 Agent Token 或安装注册令牌",
-          all(secret not in node_payload for secret in ("agent_token", "reg_token", "agent_url", "agent_port")), node_payload[:300])
-    r, al = admin.submit("admin/whmcsbridge/index", {}, match="admin/whmcsbridge/rotate")
-    token_match = re.search(r"<code[^>]*>([a-f0-9]{64})</code>", r.text)
-    rotated_token = token_match.group(1) if token_match else ""
-    old_key = requests.get(bridge_url, headers=headers, timeout=30)
-    new_headers = {"Authorization": "Bearer " + rotated_token, "X-Forwarded-Proto": "https"}
-    new_key = requests.get(bridge_url, headers=new_headers, timeout=30)
-    check("[WHMCS] 轮换立即撤销旧密钥、稳定身份不变且新密钥可用",
-          rotated_token != "" and rotated_token != bridge_token and one("select value from %s where name='nat_whmcs_bridge_id'" % t("setting")) == bridge_id
-          and old_key.status_code == 401 and new_key.status_code == 200, (old_key.status_code, new_key.status_code))
-
     rc2, out2, _ = run_install(cmds[0])
     check("[NAT] 令牌一次性：同一命令再次运行失败，并提示重新生成令牌", rc2 != 0 and "重新生成令牌" in out2, out2[-500:])
     r = admin.get("admin/nat_node/command", id=nid)

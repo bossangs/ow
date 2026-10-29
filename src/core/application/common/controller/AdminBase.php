@@ -32,9 +32,9 @@ abstract class AdminBase extends Base
                 session('admin_id', null);
             }
         }
-        // 后台访问时自动补齐所有未完成的数据库升级（包括登录页与新增版本迁移）。
-        require_once CORE_PATH . 'install/upgrade.php';
-        if ((int) setting('schema_version', '1') < IDC_SCHEMA_VERSION) {
+        if ((int) setting('schema_version', '1') < 4) {
+            // 覆盖升级后首次打开后台（含登录页）：自动补齐新表/新字段（幂等，登录流程依赖新字段）
+            require_once CORE_PATH . 'install/upgrade.php';
             idc_schema_upgrade();
         }
         if ($this->needLogin && !$this->admin) {

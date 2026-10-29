@@ -16,7 +16,7 @@ class NatNode extends UpstreamDriver
             $config['url'] = $config['agent_url'];
         } parent::__construct($config);
     }
-    private function req($method, $path, $body = null, $allow404 = false)
+    private function req($method, $path, $body = null)
     {
         $raw = $body === null ? '' : json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $ts = (string)time();
@@ -26,7 +26,6 @@ class NatNode extends UpstreamDriver
         if ($r['error']) {
             throw new UpstreamException('NAT 节点连接失败');
         } $d = HttpClient::json($r);
-        if ($allow404 && (int) $r['status'] === 404) return null;
         if (!is_array($d) || $r['status'] >= 400 || isset($d['code']) && $d['code'] != 0) {
             throw new UpstreamException(is_array($d) && isset($d['msg']) ? $d['msg'] : 'NAT 节点请求失败');
         }
@@ -48,7 +47,7 @@ class NatNode extends UpstreamDriver
     public function createService(array $p)
     {
         $o = isset($p['options']) && is_array($p['options']) ? $p['options'] : array();
-        $name = isset($p['instance_name']) && preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/', (string) $p['instance_name']) ? (string) $p['instance_name'] : 'vm' . strtolower(substr(bin2hex(function_exists('random_bytes') ? random_bytes(6) : openssl_random_pseudo_bytes(6)), 0, 12));
+        $name = 'vm' . strtolower(substr(bin2hex(function_exists('random_bytes') ? random_bytes(6) : openssl_random_pseudo_bytes(6)), 0, 12));
         $d = $this->req('POST', '/v1/instances', array('name' => $name, 'image' => isset($p['os']) ? $p['os'] : 'debian12', 'cpu' => isset($o['cpu']) ? $o['cpu'] : 1, 'memory_mb' => isset($o['memory_mb']) ? $o['memory_mb'] : 512, 'disk_gb' => isset($o['disk_gb']) ? $o['disk_gb'] : 10, 'swap_mb' => isset($o['swap_mb']) ? $o['swap_mb'] : 0, 'bandwidth_mbps' => isset($o['bandwidth_mbps']) ? $o['bandwidth_mbps'] : 0, 'nat_ports' => isset($o['nat_ports']) ? $o['nat_ports'] : 0, 'ipv6' => !empty($o['ipv6']), 'password' => isset($p['password']) ? $p['password'] : '', 'hostname' => isset($p['hostname']) ? $p['hostname'] : '', 'billingcycle' => isset($p['billingcycle']) ? $p['billingcycle'] : ''));
 
         return array('service_id' => $name, 'order_id' => '', 'status' => 'active', 'raw' => $d);
@@ -61,11 +60,6 @@ class NatNode extends UpstreamDriver
         $b = isset($d['port_end']) ? $d['port_end'] : $a;
 
         return array('status' => $this->status(isset($d['status']) ? $d['status'] : ''), 'ip' => $ip, 'ips' => $ip ? array($ip) : array(), 'username' => 'root', 'password' => '', 'hostname' => isset($d['name']) ? $d['name'] : '', 'os' => isset($d['image']) ? $d['image'] : '', 'due_date' => '', 'raw' => $d, 'ssh_port' => isset($d['ssh_port']) ? $d['ssh_port'] : $a, 'port_range' => $a . '-' . $b, 'ipv4_internal' => isset($d['ipv4_internal']) ? $d['ipv4_internal'] : '', 'ipv6' => isset($d['ipv6']) ? $d['ipv6'] : '', 'ssh' => 'ssh root@' . $ip . ' -p ' . (isset($d['ssh_port']) ? $d['ssh_port'] : $a));
-    }
-    public function findService($id)
-    {
-        $d = $this->req('GET', '/v1/instances/' . rawurlencode($id), null, true);
-        return $d === null ? null : $d;
     }
     public function renewService($id, $cycle)
     {

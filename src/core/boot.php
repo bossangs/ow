@@ -7,7 +7,7 @@ if (version_compare(PHP_VERSION, '7.0.0', '<')) {
     exit('本系统需要 PHP 7.0 或更高版本，当前版本：' . PHP_VERSION);
 }
 
-define('IDC_VERSION', '1.1.0');
+define('IDC_VERSION', '1.0.0');
 define('WEB_ROOT', rtrim(str_replace('\\', '/', dirname(__DIR__)), '/') . '/');
 define('CORE_PATH', WEB_ROOT . 'core/');
 define('IDC_CLI', PHP_SAPI === 'cli');

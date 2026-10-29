@@ -1,51 +1,67 @@
-# WHMCS IDC NAT 自动对接模块
+# WHMCS IDC NAT 服务器模块
 
-这个 WHMCS 包含一个 NAT 产品模块和一个全局配对 Addon。WHMCS 产品开通时会向 IDCDNS 面板查询可用节点并自动分配实例；不需要在 WHMCS「服务器」页面新增 Server，也不需要逐台添加 NAT Agent。
+将 `modules/servers/idcnat/` 放进 WHMCS 根目录后，WHMCS 会在产品的「模块设置」中识别 **IDC NAT 节点**。模块直接调用 IDCDNS NAT Agent，不需要手动录入每个服务的节点 ID、注册令牌，也不需要复制每个服务的开通命令。
 
-## 压缩包结构
-
-ZIP 以 WHMCS 根目录为解压基准：
+## 安装包目录
 
 ```text
 modules/servers/idcnat/idcnat.php
 modules/servers/idcnat/clientarea.tpl
-modules/addons/idcnatbridge/idcnatbridge.php
 README.md
 ```
 
-解压后必须直接得到 `modules/`，不要多出一层 `whmcs/` 或 `whmcs-nat/` 目录。
+压缩包以 WHMCS 根目录为解压基准；解压后应得到 `modules/servers/idcnat/`，而不是多一层 `whmcs-nat/` 目录。
 
-## 安装与一次性配对
+## 安装与首次配置
 
-1. 备份 WHMCS 文件，将 ZIP 解压到 WHMCS 根目录。
-2. 在 IDCDNS 后台进入「NAT 节点 → WHMCS 自动对接」，点击生成桥接密钥并复制。密钥只显示一次；轮换会立即撤销旧密钥，但不会丢失已建立的实例映射。
-3. WHMCS 后台进入「系统设置 → Addon Modules」，找到 **IDC NAT Bridge** 并启用。配置面板根地址（例如 `https://panel.example.com`）和桥接密钥。
-4. 打开 WHMCS「Addons → IDC NAT Bridge」确认面板连接成功，并能自动列出节点及容量。
-5. 在 NAT 产品的「模块设置」里选择 `IDC NAT（面板自动发现）`。**不要新增 WHMCS Server 记录**；本模块的产品开通、查询和生命周期操作直接读取刚才配对的全局面板配置。
-6. 在产品模块设置中选择默认镜像、CPU、内存、磁盘、额外 NAT 端口和带宽。若客户要按单选择规格，可配置这些选项（值用纯数字，不带单位）：
+1. 备份 WHMCS 后，将压缩包直接解压到 WHMCS 网站根目录。
+2. 在 WHMCS 后台「系统设置 → 产品/服务 → 服务器」添加 NAT 节点服务器：
+   - **模块**：`IDC NAT 节点`
+   - **主机名或 IP**：Agent 的公网地址；若主机名中填写完整 `https://` URL，模块会沿用该协议。
+   - **端口**：默认 `9180`；若 Agent 使用其他端口则填写实际端口。
+   - **Password**：该节点 Agent Token（节点 `/etc/idcnat/agent.json` 中的 `agent_token`）。这是 WHMCS 服务器凭据，不是用户的 WHMCS 密码。
+   - 配好有效证书与 HTTPS 后再勾选 **Secure**。若使用裸 HTTP，开通/改密请求中的 root 密码和实例资料会以明文传输；生产环境请使用 HTTPS 和有效证书。
+3. 在 WHMCS 产品的「模块设置」中选择 **IDC NAT 节点**，设置默认镜像、CPU、内存、磁盘、额外 NAT 端口和带宽；选择已添加的 NAT 节点服务器或服务器组。
+4. 若要让客户在下单时选规格，在 WHMCS 产品中另建「可配置选项」组。模块按选项名称读取下列值（值使用纯数字，不要附加单位）：
    - `Image` 或 `OS`：如 `debian12`、`ubuntu2404`
-   - `CPU Cores`：CPU 核数
+   - `CPU Cores`：核数
    - `Memory MB` 或 `RAM MB`：内存 MB
    - `Disk GB` 或 `Storage GB`：磁盘 GB
-   - `NAT Ports`：额外转发端口数（不含独立 SSH 端口）
+   - `NAT Ports`：额外转发端口数量（不含独立 SSH 端口）
    - `Bandwidth Mbps`：带宽 Mbps，`0` 表示不单独设置
 
-此流程仍需管理员在 Addon Modules 完成一次信任配对（面板地址和密钥）；WHMCS 官方 API 没有公开的 `AddServer` 命令，因此本包不直接写 WHMCS 内部服务器表，也不会用不受支持的方式偷偷创建服务器记录。完成配对后，添加节点不需要在 WHMCS 手工添加任何服务器或 Agent 字段。
+**只用固定套餐时，不必创建可配置选项组**：产品的模块默认值即可开通服务。WHMCS 中仍需一次性创建服务器并把服务器分配给产品；这是 WHMCS 的标准设置步骤。之后每个服务的名字会按服务 ID 自动生成（`whmcs-服务ID`），规格从产品默认值或可配置选项自动带入，不需要逐单填命令。
 
-## NAT 节点安装与自动开通
+## 节点安装与自动开通
 
-每台新 NAT 主机仍需在 IDCDNS 后台生成的一键安装命令上运行一次，以安装并注册 Agent。注册成功后，节点会自动出现在面板及 WHMCS Addon 状态页；WHMCS 不读取或保存 root 安装命令，也无需人工填写节点编号或注册令牌。
+如使用现有 IDCDNS 控制面板管理节点，先在面板「NAT 节点」新增节点。面板现有功能会把节点 ID 和一次性注册令牌直接写进一键安装命令；在节点服务器上运行一次即可安装并注册 Agent。注册令牌只用于节点安装注册；WHMCS 后续与 Agent 通信使用的是 Agent Token。
 
-WHMCS 订单达到自动开通条件后，面板自动选择在线且有容量的节点，并记录服务与 NAT 实例的对应关系。模块支持开通重试幂等、暂停、恢复、终止、改密、开机、关机和重启；客户服务页显示节点名、实例状态、IP、SSH 端口、内网地址、端口范围和规格。
+WHMCS 订单达到自动开通条件时，模块会自动：
 
-## 安全说明
+- 以 `whmcs-服务ID` 作为稳定实例名，避免 WHMCS 超时重试时重复创建；
+- 检查节点启用的镜像，并创建对应的 NAT 实例；
+- 在客户服务页显示实例状态、IP、SSH 端口、内网 IP、端口范围与规格；
+- 响应 WHMCS 的暂停、恢复、终止、更改密码，并提供开机、关机、重启操作。
 
-- 桥接密钥在 IDCDNS 数据库中仅保存 SHA-256 摘要；WHMCS Addon 配置用密码字段存储。请限制 WHMCS 管理后台和数据库访问。
-- 桥接 API 强制 HTTPS，使用 Bearer 密钥、验证 TLS 证书且不跟随重定向。生产环境不得使用裸 HTTP。
-- WHMCS 不会收到 Agent Token、节点注册令牌或 root 安装命令。
-- 轮换密钥会立即撤销旧密钥；需同步更新 WHMCS Addon 配置。已有实例映射会保留。
-- 终止服务会删除对应 NAT 实例及其数据；启用自动终止前确认 WHMCS 订单策略。
+Agent 的 `9180/TCP`（或你配置的实际端口）必须允许 WHMCS 服务器访问；节点防火墙还应放行其配置的 NAT 端口段。模块调用方向是 WHMCS 服务器 → NAT Agent。
+
+## 已支持的 Agent API
+
+- `GET /v1/info`
+- `GET /v1/instances/{name}`
+- `POST /v1/instances`
+- `POST /v1/instances/{name}/action`
+- `DELETE /v1/instances/{name}`
+
+请求使用 Agent Token 做带时间戳和随机 nonce 的 HMAC-SHA256 签名，不会把 Agent Token 放进 URL 或请求正文。Agent 需启用 IDCDNS NAT Agent 的兼容 API。
+
+## 安全提示
+
+- Agent Token 只应保存在 WHMCS 的服务器配置中；不要放入产品可配置选项、客户自定义字段、欢迎邮件或公开安装命令。
+- 推荐用有效 TLS 证书保护 Agent API。不要为规避证书验证而关闭 HTTPS 校验。
+- `Terminate` 会删除 NAT 实例及其数据；执行前应确认 WHMCS 的到期与终止策略符合预期。
+- 更换或重置 Agent Token 后，也要同步更新 WHMCS 服务器的 Password。
 
 ## 版本
 
-`2.1.0` — 全局 Addon 配对、无需 Server 记录、面板自动发现/分配；PHP 7.0+。需要安装带 schema v6 桥接 API 的 IDCDNS 面板；从 v5 升级会自动迁移已有实例映射。
+`1.0.0` — 首版；PHP 7.0+，遵循 WHMCS 标准服务器模块接口。

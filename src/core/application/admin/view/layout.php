@@ -24,7 +24,6 @@ $menuGroups = [
         ['productgroup', '产品分组', 'product_group/index'],
         ['upstream', '上游接口', 'upstream/index'],
         ['natnode', 'NAT 节点', 'nat_node/index'],
-        ['whmcsbridge', 'WHMCS 桥接', 'whmcsbridge/index'],
     ],
     'DNS 分发' => [
         ['subdomain', '子域名', 'subdomain/index'],

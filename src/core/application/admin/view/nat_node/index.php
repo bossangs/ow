@@ -25,7 +25,6 @@ $ago = function ($ts) {
   <span class="text-muted small">共 <?= count($list) ?> 个</span>
   <div class="ms-auto d-flex gap-2">
     <form method="post" action="<?= h(url_to('admin/nat_node/quick')) ?>"><?= csrf_field() ?><button class="btn btn-success nat-quick">快速添加</button></form>
-    <a class="btn btn-outline-primary" href="<?= h(url_to('admin/whmcsbridge/index')) ?>">WHMCS 桥接</a>
     <a class="btn btn-primary" href="<?= h(url_to('admin/nat_node/edit')) ?>">添加节点</a>
   </div>
 </div>
