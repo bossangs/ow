@@ -1,6 +1,6 @@
 <?php
 /**
- * WHMCS provisioning module for IDCDNS NAT Agent.
+ * WHMCS provisioning module for the IDCDNS NAT control-panel bridge.
  * Compatible with PHP 7.0+ and the WHMCS provisioning module API.
  */
 
@@ -11,11 +11,11 @@ if (!defined('WHMCS')) {
 function idcnat_MetaData()
 {
     return array(
-        'DisplayName' => 'IDC NAT 节点',
+        'DisplayName' => 'IDC NAT（面板自动发现）',
         'APIVersion' => '1.1',
-        'RequiresServer' => true,
-        'DefaultNonSSLPort' => 9180,
-        'DefaultSSLPort' => 9180,
+        'RequiresServer' => false,
+        'DefaultNonSSLPort' => 80,
+        'DefaultSSLPort' => 443,
     );
 }
 
@@ -71,7 +71,7 @@ function idcnat_ConfigOptions()
     );
 }
 
-/** Create a server API URL from the standard WHMCS server fields. */
+/** Build the IDCDNS control-panel base URL from standard WHMCS server fields. */
 function idcnat_baseUrl($params)
 {
     $host = '';
@@ -81,31 +81,32 @@ function idcnat_baseUrl($params)
         $host = trim((string) $params['serverip']);
     }
     if ($host === '') {
-        throw new Exception('请在 WHMCS 服务器设置中填写 NAT Agent 主机名或 IP。');
+        throw new Exception('请填写 IDCDNS 控制面板主机名或 IP。');
     }
     if (preg_match('/[\x00-\x20\x7f]/', $host)) {
-        throw new Exception('WHMCS 服务器主机地址包含无效字符。');
+        throw new Exception('控制面板主机地址包含无效字符。');
     }
 
     if (preg_match('#^https?://#i', $host)) {
         $parts = parse_url($host);
         if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
-            throw new Exception('WHMCS 服务器主机地址格式无效。');
+            throw new Exception('控制面板 URL 格式无效。');
         }
         $scheme = strtolower($parts['scheme']);
         if (!in_array($scheme, array('http', 'https'), true) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || (isset($parts['path']) && $parts['path'] !== '' && $parts['path'] !== '/')) {
-            throw new Exception('主机地址只能是 http(s)://主机[:端口]，不能包含路径、账号或查询参数。');
+            throw new Exception('控制面板地址只能是 http(s)://主机[:端口]，不能带路径、账号或查询参数。');
         }
         $authority = $parts['host'];
         if (isset($parts['port'])) {
-            if ((int) $parts['port'] < 1 || (int) $parts['port'] > 65535) {
-                throw new Exception('NAT Agent 端口必须是 1–65535 之间的数字。');
-            }
-            $authority .= ':' . (int) $parts['port'];
-        } else {
-            $port = isset($params['serverport']) && (int) $params['serverport'] > 0 ? (int) $params['serverport'] : 9180;
+            $port = (int) $parts['port'];
             if ($port < 1 || $port > 65535) {
-                throw new Exception('NAT Agent 端口必须是 1–65535 之间的数字。');
+                throw new Exception('控制面板端口必须是 1–65535 之间的数字。');
+            }
+            $authority .= ':' . $port;
+        } else {
+            $port = isset($params['serverport']) && (int) $params['serverport'] > 0 ? (int) $params['serverport'] : ($scheme === 'https' ? 443 : 80);
+            if ($port < 1 || $port > 65535) {
+                throw new Exception('控制面板端口必须是 1–65535 之间的数字。');
             }
             $authority .= ':' . $port;
         }
@@ -113,7 +114,7 @@ function idcnat_baseUrl($params)
     }
 
     if (strpos($host, '/') !== false || strpos($host, '@') !== false || preg_match('/\s/', $host)) {
-        throw new Exception('WHMCS 服务器主机名或 IP 格式无效。');
+        throw new Exception('控制面板主机名或 IP 格式无效。');
     }
     $scheme = !empty($params['serversecure']) ? 'https' : 'http';
     $authority = $host;
@@ -133,73 +134,95 @@ function idcnat_baseUrl($params)
         }
     }
     if ($hasPort && ($hostPort < 1 || $hostPort > 65535)) {
-        throw new Exception('NAT Agent 端口必须是 1–65535 之间的数字。');
+        throw new Exception('控制面板端口必须是 1–65535 之间的数字。');
     }
     if (!$hasPort) {
-        $port = isset($params['serverport']) && (int) $params['serverport'] > 0 ? (int) $params['serverport'] : 9180;
+        $port = isset($params['serverport']) && (int) $params['serverport'] > 0 ? (int) $params['serverport'] : ($scheme === 'https' ? 443 : 80);
         if ($port < 1 || $port > 65535) {
-            throw new Exception('NAT Agent 端口必须是 1–65535 之间的数字。');
+            throw new Exception('控制面板端口必须是 1–65535 之间的数字。');
         }
         $authority .= ':' . $port;
     }
     return $scheme . '://' . $authority;
 }
 
+/** Resolve the panel URL/key from the Addon config, with server fields as compatibility fallback. */
+function idcnat_panelParams($params)
+{
+    if (!empty($params['serverpassword']) && (!empty($params['serverhostname']) || !empty($params['serverip']))) {
+        return $params;
+    }
+    $panelUrl = isset($params['panel_url']) ? trim((string) $params['panel_url']) : '';
+    $bridgeKey = isset($params['bridge_key']) ? trim((string) $params['bridge_key']) : '';
+    if (($panelUrl === '' || $bridgeKey === '') && class_exists('WHMCS\\Database\\Capsule')) {
+        try {
+            $rows = \WHMCS\Database\Capsule::table('tbladdonmodules')
+                ->where('module', 'idcnatbridge')
+                ->whereIn('setting', array('panel_url', 'bridge_key'))
+                ->get(array('setting', 'value'));
+            foreach ($rows as $row) {
+                if ($row->setting === 'panel_url' && $panelUrl === '') $panelUrl = (string) $row->value;
+                if ($row->setting === 'bridge_key' && $bridgeKey === '') $bridgeKey = (string) $row->value;
+            }
+        } catch (Exception $e) {
+            // The provisioning result below will report that the Addon has not been configured.
+        }
+    }
+    if ($panelUrl !== '') $params['serverhostname'] = $panelUrl;
+    if ($bridgeKey !== '') $params['serverpassword'] = $bridgeKey;
+    if (!isset($params['serversecure'])) $params['serversecure'] = true;
+    if (!isset($params['serverport']) || (int) $params['serverport'] < 1) $params['serverport'] = 443;
+    return $params;
+}
+
 function idcnat_safeMessage($message)
 {
-    $message = preg_replace('/(agent[_ -]?token|token|password|secret|api[_ -]?key)\s*[:=]\s*[^,;\s]+/i', '$1=***', (string) $message);
+    $message = preg_replace('/(agent[_ -]?token|token|password|secret|api[_ -]?key|authorization)\s*[:=]\s*[^,;\s]+/i', '$1=***', (string) $message);
     $message = preg_replace('/[\r\n\x00-\x1f]+/', ' ', $message);
     return substr(trim($message), 0, 240);
 }
 
-/** Signed JSON request using the exact IDCNAT Agent HMAC protocol. */
-function idcnat_api($params, $method, $path, $body = null, $allow404 = false)
+/** Authenticated JSON request to the IDCDNS WHMCS bridge. */
+function idcnat_panelApi($params, $method, $route, $body = null, $query = array())
 {
+    $params = idcnat_panelParams($params);
     if (!function_exists('curl_init')) {
         throw new Exception('WHMCS PHP 未启用 cURL 扩展。');
     }
     $token = isset($params['serverpassword']) ? trim((string) $params['serverpassword']) : '';
-    if ($token === '') {
-        throw new Exception('请在 WHMCS 服务器设置的 Password 字段填写该节点的 Agent Token。');
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) {
+        throw new Exception('请先在 WHMCS「Addon Modules」配置面板 URL 和 IDCDNS 后台生成的 64 位桥接密钥。');
     }
-    if (!is_string($path) || $path === '' || $path[0] !== '/' || strpos($path, '?') !== false || strpos($path, "\n") !== false) {
-        throw new Exception('内部请求路径无效。');
+    if (!preg_match('/^[A-Za-z][A-Za-z0-9]*$/', (string) $route)) {
+        throw new Exception('内部 API 路由无效。');
     }
-
     $raw = '';
     if ($body !== null) {
         $raw = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($raw === false) {
-            throw new Exception('NAT 请求参数无法编码。');
+            throw new Exception('请求参数无法编码。');
         }
     }
-    try {
-        $timestamp = (string) time();
-        $nonce = bin2hex(random_bytes(16));
-    } catch (Exception $e) {
-        throw new Exception('当前 PHP 环境无法生成安全随机数。');
+    $url = idcnat_baseUrl($params) . '/index.php?s=' . rawurlencode('/api/nat/' . $route);
+    if ($query) {
+        $url .= '&' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
-    $signatureInput = $timestamp . "\n" . $nonce . "\n" . strtoupper($method) . "\n" . $path . "\n" . hash('sha256', $raw);
-    $signature = hash_hmac('sha256', $signatureInput, $token);
-    $url = idcnat_baseUrl($params) . $path;
     $headers = array(
         'Accept: application/json',
-        'X-IDC-Ts: ' . $timestamp,
-        'X-IDC-Nonce: ' . $nonce,
-        'X-IDC-Sign: ' . $signature,
+        'Authorization: Bearer ' . $token,
     );
     if ($body !== null) {
         $headers[] = 'Content-Type: application/json';
     }
-
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 25);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 35);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
     if ($body !== null) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, $raw);
     }
@@ -207,38 +230,31 @@ function idcnat_api($params, $method, $path, $body = null, $allow404 = false)
     $curlError = curl_error($ch);
     $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-
     if ($response === false) {
-        throw new Exception('无法连接 NAT Agent。请检查服务器地址、端口、防火墙及 SSL 配置。' . ($curlError ? ' (' . idcnat_safeMessage($curlError) . ')' : ''));
+        throw new Exception('无法连接 IDCDNS 控制面板，请检查地址、端口、防火墙及 SSL 配置。' . ($curlError ? ' (' . idcnat_safeMessage($curlError) . ')' : ''));
     }
     $decoded = json_decode($response, true);
-    if ($status === 404 && $allow404) {
-        return null;
-    }
     if ($status === 401) {
-        throw new Exception('NAT Agent 鉴权失败，请检查 WHMCS 服务器 Password 中的 Agent Token。');
-    }
-    if ($status === 404) {
-        throw new Exception('NAT Agent 接口或实例不存在，请检查模块和服务配置。');
+        throw new Exception('面板桥接密钥无效或已轮换，请更新 WHMCS Addon 配置。');
     }
     if ($status < 200 || $status >= 300) {
         $message = is_array($decoded) && isset($decoded['msg']) ? idcnat_safeMessage($decoded['msg']) : '';
-        throw new Exception($message !== '' ? 'NAT Agent 请求失败：' . $message : 'NAT Agent 请求失败（HTTP ' . $status . '）。');
+        throw new Exception($message !== '' ? '面板请求失败：' . $message : '面板请求失败（HTTP ' . $status . '）。');
     }
     if (!is_array($decoded) || !isset($decoded['code']) || (int) $decoded['code'] !== 0) {
         $message = is_array($decoded) && isset($decoded['msg']) ? idcnat_safeMessage($decoded['msg']) : '';
-        throw new Exception($message !== '' ? 'NAT Agent 返回错误：' . $message : 'NAT Agent 返回的数据格式无效。');
+        throw new Exception($message !== '' ? '面板返回错误：' . $message : '面板返回的数据格式无效。');
     }
     return isset($decoded['data']) ? $decoded['data'] : array();
 }
 
-function idcnat_instanceName($params)
+function idcnat_externalId($params)
 {
     $serviceId = isset($params['serviceid']) ? (string) $params['serviceid'] : '';
-    if (!preg_match('/^[1-9][0-9]{0,20}$/', $serviceId)) {
-        throw new Exception('WHMCS 服务 ID 缺失或无效，无法生成 NAT 实例名。');
+    if (!preg_match('/^[1-9][0-9]{0,19}$/', $serviceId)) {
+        throw new Exception('WHMCS 服务 ID 缺失或无效。');
     }
-    return 'whmcs-' . $serviceId;
+    return $serviceId;
 }
 
 function idcnat_normalizeKey($key)
@@ -300,16 +316,35 @@ function idcnat_productSettings($params)
     return $values;
 }
 
-function idcnat_getInstance($params, $name, $allow404 = false)
+function idcnat_normalizeInstance($data)
 {
-    return idcnat_api($params, 'GET', '/v1/instances/' . rawurlencode($name), null, $allow404);
+    if (!is_array($data)) {
+        return array();
+    }
+    $instance = isset($data['raw']) && is_array($data['raw']) ? $data['raw'] : array();
+    $instance['name'] = isset($data['hostname']) ? $data['hostname'] : (isset($instance['name']) ? $instance['name'] : '');
+    $instance['status'] = isset($data['status']) ? $data['status'] : (isset($instance['status']) ? $instance['status'] : 'unknown');
+    $instance['image'] = isset($data['os']) ? $data['os'] : (isset($instance['image']) ? $instance['image'] : '');
+    $instance['public_ipv4'] = isset($data['ip']) ? $data['ip'] : (isset($instance['public_ipv4']) ? $instance['public_ipv4'] : '');
+    foreach (array('ssh_port', 'ipv4_internal', 'ipv6') as $key) {
+        if (isset($data[$key])) {
+            $instance[$key] = $data[$key];
+        }
+    }
+    if (isset($data['port_range']) && preg_match('/^(\d+)-(\d+)$/', (string) $data['port_range'], $m)) {
+        $instance['port_start'] = (int) $m[1];
+        $instance['port_end'] = (int) $m[2];
+    }
+    return $instance;
 }
 
 function idcnat_runAction($params, $action, $body = array())
 {
     try {
-        $name = idcnat_instanceName($params);
-        idcnat_api($params, 'POST', '/v1/instances/' . rawurlencode($name) . '/action', array_merge($body, array('action' => $action)));
+        $externalId = idcnat_externalId($params);
+        unset($body['external_id']);
+        $body['action'] = $action;
+        idcnat_panelApi($params, 'POST', 'whmcsAction', $body, array('external_id' => $externalId));
         return 'success';
     } catch (Exception $e) {
         return idcnat_safeMessage($e->getMessage());
@@ -319,9 +354,16 @@ function idcnat_runAction($params, $action, $body = array())
 function idcnat_TestConnection($params)
 {
     try {
-        $data = idcnat_api($params, 'GET', '/v1/info');
-        $node = is_array($data) && !empty($data['hostname']) ? (string) $data['hostname'] : 'NAT Agent';
-        return array('success' => true, 'error' => '', 'description' => '连接成功：' . idcnat_safeMessage($node));
+        $data = idcnat_panelApi($params, 'GET', 'whmcsInfo');
+        $nodes = isset($data['nodes']) && is_array($data['nodes']) ? $data['nodes'] : array();
+        $online = 0;
+        foreach ($nodes as $node) {
+            if (isset($node['state']) && $node['state'] === 'online' && (!isset($node['available']) || (int) $node['available'] > 0)) {
+                $online++;
+            }
+        }
+        $message = '面板已连接，自动发现 ' . count($nodes) . ' 台 NAT 节点；当前可开通 ' . $online . ' 台。';
+        return array('success' => true, 'error' => '', 'description' => $message);
     } catch (Exception $e) {
         return array('success' => false, 'error' => idcnat_safeMessage($e->getMessage()));
     }
@@ -330,51 +372,24 @@ function idcnat_TestConnection($params)
 function idcnat_CreateAccount($params)
 {
     try {
-        $name = idcnat_instanceName($params);
-        $existing = idcnat_getInstance($params, $name, true);
-        if (is_array($existing)) {
-            return 'success';
-        }
-
+        $externalId = idcnat_externalId($params);
         $settings = idcnat_productSettings($params);
-        $info = idcnat_api($params, 'GET', '/v1/info');
-        if (isset($info['images']) && is_array($info['images']) && $info['images'] && !in_array($settings['image'], $info['images'], true)) {
-            throw new Exception('所选系统镜像未在该 NAT 节点启用，请检查节点镜像列表。');
-        }
         $password = isset($params['password']) ? (string) $params['password'] : '';
         if (strlen($password) < 8 || strlen($password) > 128 || preg_match('/[\r\n]/', $password)) {
             throw new Exception('WHMCS 服务密码无效：密码需为 8–128 个字符且不能包含换行。');
         }
-        $payload = array(
-            'name' => $name,
-            'image' => $settings['image'],
-            'cpu' => $settings['cpu'],
-            'memory_mb' => $settings['memory_mb'],
-            'disk_gb' => $settings['disk_gb'],
-            'swap_mb' => 0,
-            'bandwidth_mbps' => $settings['bandwidth_mbps'],
-            'nat_ports' => $settings['nat_ports'],
-            'ipv6' => false,
-            'password' => $password,
-            'hostname' => $name,
-            'billingcycle' => isset($params['billingcycle']) ? (string) $params['billingcycle'] : '',
-        );
-        try {
-            idcnat_api($params, 'POST', '/v1/instances', $payload);
-            return 'success';
-        } catch (Exception $createError) {
-            // WHMCS may retry after a timeout even if the Agent finished the create.
-            // Reconcile by the deterministic WHMCS service name before returning an error.
-            try {
-                $after = idcnat_getInstance($params, $name, true);
-                if (is_array($after)) {
-                    return 'success';
-                }
-            } catch (Exception $ignored) {
-                // Preserve the original provisioning error.
-            }
-            throw $createError;
+        $domain = isset($params['domain']) ? trim((string) $params['domain']) : '';
+        if ($domain === '' || !preg_match('/^[a-zA-Z0-9.-]{1,63}$/', $domain)) {
+            $domain = 'whmcs-' . $externalId;
         }
+        $payload = array_merge($settings, array(
+            'external_id' => $externalId,
+            'password' => $password,
+            'hostname' => $domain,
+            'billingcycle' => isset($params['billingcycle']) ? (string) $params['billingcycle'] : '',
+        ));
+        idcnat_panelApi($params, 'POST', 'whmcsCreate', $payload);
+        return 'success';
     } catch (Exception $e) {
         return idcnat_safeMessage($e->getMessage());
     }
@@ -393,14 +408,7 @@ function idcnat_UnsuspendAccount($params)
 function idcnat_TerminateAccount($params)
 {
     try {
-        // Verify the configured endpoint before treating a 404 as an already-deleted instance.
-        idcnat_api($params, 'GET', '/v1/info');
-        $name = idcnat_instanceName($params);
-        $existing = idcnat_getInstance($params, $name, true);
-        if ($existing === null) {
-            return 'success';
-        }
-        idcnat_api($params, 'DELETE', '/v1/instances/' . rawurlencode($name));
+        idcnat_panelApi($params, 'POST', 'whmcsTerminate', array('external_id' => idcnat_externalId($params)));
         return 'success';
     } catch (Exception $e) {
         return idcnat_safeMessage($e->getMessage());
@@ -420,12 +428,12 @@ function idcnat_ClientArea($params)
 {
     $instance = array();
     $errorMessage = '';
+    $nodeName = '';
     try {
-        $name = idcnat_instanceName($params);
-        $instance = idcnat_getInstance($params, $name, false);
-        if (!is_array($instance)) {
-            $instance = array();
-        }
+        $externalId = idcnat_externalId($params);
+        $data = idcnat_panelApi($params, 'GET', 'whmcsGet', null, array('external_id' => $externalId));
+        $instance = idcnat_normalizeInstance(isset($data['instance']) ? $data['instance'] : array());
+        $nodeName = isset($data['node_name']) ? (string) $data['node_name'] : '';
     } catch (Exception $e) {
         $errorMessage = idcnat_safeMessage($e->getMessage());
     }
@@ -434,7 +442,8 @@ function idcnat_ClientArea($params)
         'vars' => array(
             'natInstance' => $instance,
             'natError' => $errorMessage,
-            'natPublicIp' => isset($instance['public_ipv4']) && $instance['public_ipv4'] !== '' ? $instance['public_ipv4'] : (isset($params['serverip']) ? $params['serverip'] : ''),
+            'natNodeName' => $nodeName,
+            'natPublicIp' => isset($instance['public_ipv4']) ? $instance['public_ipv4'] : '',
         ),
     );
 }

@@ -10,6 +10,7 @@
                 <table class="table table-striped">
                     <tbody>
                         <tr><th>实例名称</th><td>{$natInstance.name|escape}</td></tr>
+                        <tr><th>所在节点</th><td>{$natNodeName|escape}</td></tr>
                         <tr><th>运行状态</th><td>{$natInstance.status|escape}</td></tr>
                         <tr><th>系统镜像</th><td>{$natInstance.image|escape}</td></tr>
                         <tr><th>公网 IPv4</th><td>{$natPublicIp|escape}</td></tr>

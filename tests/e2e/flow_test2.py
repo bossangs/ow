@@ -435,7 +435,7 @@ def main():
     r0 = ev.get("index/auth/login", back="//evil.example/")
     r, al = ev.submit("index/auth/login", {"account": "buyer1", "password": "Buyer@12345"}, back="//evil.example/")
     check("登录 back 参数不能跳转到站外（防开放重定向）", "evil.example" not in r.url, r.url)
-    check("数据库结构版本已记录为最新", one("select value from %s where name='schema_version'" % t("setting")) == "4", one("select value from %s where name='schema_version'" % t("setting")))
+    check("数据库结构版本已记录为最新", one("select value from %s where name='schema_version'" % t("setting")) == "6", one("select value from %s where name='schema_version'" % t("setting")))
 
     # 续费：易支付
     due0 = int(one("select due_time from %s where id=%s" % (t("service"), sid)) or 0)

@@ -11,7 +11,7 @@
 use think\Db;
 
 if (!defined('IDC_SCHEMA_VERSION')) {
-    define('IDC_SCHEMA_VERSION', 4);
+    define('IDC_SCHEMA_VERSION', 6);
 }
 
 function idc_upgrade_has_column($table, $column)
@@ -32,7 +32,30 @@ function idc_upgrade_add_columns($table, array $columns)
     }
 }
 
-/** 第 3 版：云主机产品的配置规格字段（前台商品页展示） */
+/** 第 5 版：WHMCS 面板桥接实例映射表 */
+function idc_upgrade_v5_whmcs_bridge()
+{
+    idc_upgrade_create_table('whmcs_nat_instance');
+}
+
+/** 第 6 版：稳定 WHMCS 桥接身份，轮换密钥时保留旧服务映射。 */
+function idc_upgrade_v6_whmcs_bridge_identity()
+{
+    $p = (string) config('database.prefix');
+    $full = $p . 'whmcs_nat_instance';
+    if (!idc_upgrade_has_column($full, 'bridge_id') && idc_upgrade_has_column($full, 'bridge_hash')) {
+        Db::execute('ALTER TABLE `' . str_replace('`', '', $full) . '` CHANGE COLUMN `bridge_hash` `bridge_id` char(64) NOT NULL');
+    }
+    $bridgeId = (string) setting('nat_whmcs_bridge_id', '');
+    if (!preg_match('/^[a-f0-9]{32}$/', $bridgeId)) {
+        $bytes = function_exists('random_bytes') ? random_bytes(16) : openssl_random_pseudo_bytes(16);
+        if (!is_string($bytes) || strlen($bytes) !== 16) throw new \RuntimeException('无法生成 WHMCS 桥接身份');
+        $bridgeId = bin2hex($bytes);
+        setting_save(array('nat_whmcs_bridge_id' => $bridgeId));
+    }
+    Db::execute('UPDATE `' . str_replace('`', '', $full) . '` SET `bridge_id`=?', array($bridgeId));
+}
+
 function idc_upgrade_v3_product_specs()
 {
     idc_upgrade_add_columns('product', array(
@@ -107,6 +130,14 @@ function idc_schema_upgrade($force = false)
         }
         if ($force || $current < 4) {
             idc_upgrade_v4_twofa();
+            $steps++;
+        }
+        if ($force || $current < 5) {
+            idc_upgrade_v5_whmcs_bridge();
+            $steps++;
+        }
+        if ($force || $current < 6) {
+            idc_upgrade_v6_whmcs_bridge_identity();
             $steps++;
         }
         setting_save(array('schema_version' => (string)IDC_SCHEMA_VERSION));
